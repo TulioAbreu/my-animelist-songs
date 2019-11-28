@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "googleapis": "^45.0.0",
+    "jsdom": "^15.2.1",
+    "node-fetch": "^2.6.0",
+    "xmldom": "^0.1.27",
+    "xpath": "^0.0.27",
+    "youtube-search-google-api": "^0.6.0"
+  },
+  "browser": {
+    "request": "xhr"
+  }
+}
