@@ -1,75 +1,78 @@
-const AnimeListExtractor = require('./animeListExtractor')
-const MusicNamesExtractor = require('./musicNamesExtractor')
-const fs = require('fs')
-const process = require('process')
+const YoutubeSearcher = require('./youtube-searcher')
+const YoutubeDownloader = require('./youtube-downloader')
+const scrapProfile = require('./mal-profile-scrap')
+const getAnimeSongs = require('./mal-anime-scrap')
+const sleep = require('system-sleep')
+const cliProgress = require('cli-progress')
+const ffmpeg = require('ffmpeg')
+const bar = new cliProgress.Bar({}, cliProgress.Presets.shades_classic)
+const config = require('../config.js')
 
-async function main(argv) {
-    async function scrapeAnimeList(userName) {
-        let animeListExtractor = new AnimeListExtractor(userName);
-        await animeListExtractor.start()
-        return animeListExtractor.getTitles()
+async function main() {
+    function wait() {
+        sleep(Math.random()*1000 + 2000)
     }
 
-    async function getAnimeSongs(animePageLinks) {
-        let animeSongs = []
-        for (let i = 0; i < animePageLinks.length; ++i) {
-            let musicNamesExtractor = new MusicNamesExtractor(animePageLinks[i])
-            await musicNamesExtractor.start()
+    function sanitizeMusicName(name) {
+        name = name.replace(/(ep[s]*[ ]*[0-9]+\-[0-9]*)+/g, '')
+            .replace(/([0-9]+\-[0-9]*)+/g, '')
+            .replace(/#[0-9]+[:]*/g, '')
+            .replace(/[^a-zA-Z\d\s:]/g, ' ')
+            .replace('"', '')
+            .replace(/[ ]+/g, ' ')
+        return name
+    }
+    
+    console.log('Collecting profile animes...')
+    const animeIdList = await scrapProfile(config.profileName)
 
-            let songs = musicNamesExtractor.getSongs()
-            let animeName = musicNamesExtractor.getAnimeName()
-            for (let j = 0; j < songs.length; ++j) {
-                if (songs[j].length > 3) {
-                    let indexOfStart = songs[j].search(/:\w?/)
-                    if (indexOfStart == -1) {
-                        indexOfStart = 0;
-                    } else {
-                        indexOfStart += 1
-                    }
-                    let indexOfEps = songs[j].search(/ \(ep/)
-                    songs[j] = songs[j].slice(indexOfStart, indexOfEps + 1)
-                    songs[j] = songs[j].replace(' "', '')
-                    songs[j] = songs[j].replace('"', '')
-                    songs[j] = songs[j].replace('"', '')
-                    songs[j] = songs[j].replace('(', '')
-                    songs[j] = songs[j].replace('(', '')
-                    songs[j] = songs[j].replace(')', '')
-                    songs[j] = songs[j].replace('\n', '')
-                    songs[j] = songs[j].replace(')', '')
-                    songs[j] = songs[j].replace(/[^\x00-\x7F]/g, "");
-                    if (songs[j] != "") {
-                        animeSongs.push({
-                            'animeName': animeName,
-                            'songName': songs[j]
-                        })
-                    }
-                }
-            }
+    const animeUrlList = []
+    for (let i = 0; i < animeIdList.length/200; ++i) {
+        animeUrlList.push(`https://myanimelist.net/anime/${animeIdList[i]}`)
+    }
+
+    console.log('Collecting anime songs')
+    bar.start(animeUrlList.length, 0)
+    let songList = []
+    for (let i = 0; i < animeUrlList.length; ++i) {
+        const animeSongList = await getAnimeSongs(animeUrlList[i])
+        for (let j = 0; j < animeSongList.length; ++j) {
+            songList.push(animeSongList[j])
         }
-        
-        return animeSongs
+        bar.increment()
+        wait()
     }
+    bar.stop()
 
-    if (argv.length < 3) {
-        console.log("node src/main.js <yourMyAnimeListNick>")
-        return;
+    console.log('Collecting songs URLs')
+    let ytSearcher = new YoutubeSearcher()
+    let ytSongList = []
+    bar.start(songList.length, 0)
+    for (let i = 0; i < songList.length; ++i) {
+        let currentSong = songList[i]
+        let sanitizedSong = sanitizeMusicName(currentSong)
+
+        ytSongList.push({
+            name: sanitizedSong,
+            URL: await ytSearcher.search(sanitizedSong)
+        })
+        bar.increment()
+        wait()
     }
-    let userName = argv[2];
+    bar.stop()
 
-    let animeIdList = await scrapeAnimeList(userName)
-    console.log("[LOG] Searching profile...")
-    let animePageLinks = []
-    for (let i = 0; i < animeIdList.length; ++i) {
-        animePageLinks.push('https://myanimelist.net/anime/' + animeIdList[i])
-    }
+    console.log(ytSongList)
 
-    console.log("[LOG] Getting anime songs...")
-    let songs = await getAnimeSongs(animePageLinks)
-
-    let songsJson = JSON.stringify(songs, null, 4)
-    fs.writeFile('./animeSongs.json', songsJson, () => {
-        console.log("Success!")
-    })
+    // console.log('Downloading songs')
+    // let ytDownloader = new YoutubeDownloader()
+    // for (let i = 0; i < ytSongList.length; ++i) {
+    //     let { name, URL } = ytSongList[i]
+    //     let streamMP4 = ytDownloader.downloadMp4Stream(URL)
+    //     new ffmpeg({ source: streamMP4, nolog: true })
+    //         .setFfmpegPath(config.ffmpegPath)
+    //         .toFormat('mp3')
+    //         .saveToFile(`./songs/${name}`)
+    // }
 }
 
-main(process.argv)
+main()
