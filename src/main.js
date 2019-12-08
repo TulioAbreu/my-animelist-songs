@@ -10,7 +10,7 @@ const config = require('../config.js')
 
 async function main() {
     function wait() {
-        sleep(Math.random()*1000 + 2000)
+        sleep(Math.random()*1000 + 500)
     }
 
     function sanitizeMusicName(name) {
@@ -19,60 +19,79 @@ async function main() {
             .replace(/#[0-9]+[:]*/g, '')
             .replace(/[^a-zA-Z\d\s:]/g, ' ')
             .replace('"', '')
+            .replace('|', '')
+            .replace(':', '')
+            .replace('*', '')
+            .replace('<', '')
+            .replace('>', '')
+            .replace('/', '')
+            .replace('\\', '')
+            .replace('?', '')
             .replace(/[ ]+/g, ' ')
         return name
     }
     
-    console.log('Collecting profile animes...')
+    console.log('Collecting profile animes... ' + config.profileName)
     const animeIdList = await scrapProfile(config.profileName)
 
     const animeUrlList = []
-    for (let i = 0; i < animeIdList.length/200; ++i) {
+    for (let i = 0; i < animeIdList.length; ++i) {
         animeUrlList.push(`https://myanimelist.net/anime/${animeIdList[i]}`)
     }
 
     console.log('Collecting anime songs')
-    bar.start(animeUrlList.length, 0)
     let songList = []
-    for (let i = 0; i < animeUrlList.length; ++i) {
-        const animeSongList = await getAnimeSongs(animeUrlList[i])
-        for (let j = 0; j < animeSongList.length; ++j) {
-            songList.push(animeSongList[j])
+
+    let getAllSongs = async function(x) {
+        if (x < animeUrlList.length) {
+            console.log(`Requesting anime page ${x}/${animeUrlList.length}`)
+            const animeSongList = await getAnimeSongs(animeUrlList[x])
+            animeSongList.forEach(song => {
+                songList.push(song)
+            })
+            console.log(animeSongList)
+            wait()
+            await getAllSongs(x+1)
         }
-        bar.increment()
-        wait()
     }
-    bar.stop()
+    await getAllSongs(0)
+
 
     console.log('Collecting songs URLs')
     let ytSearcher = new YoutubeSearcher()
     let ytSongList = []
-    bar.start(songList.length, 0)
-    for (let i = 0; i < songList.length; ++i) {
-        let currentSong = songList[i]
-        let sanitizedSong = sanitizeMusicName(currentSong)
+    let getAllUrls = async function(x) {
+        if (x < songList.length) {
+            console.log(`Requesting song ${x}/${songList.length}`)
+            let currentSong = songList[x]
+            let sanitizedSong = sanitizeMusicName(currentSong)
+        
+            let newSong = {
+                name: sanitizedSong,
+                URL: await ytSearcher.search(sanitizedSong)
+            }
 
-        ytSongList.push({
-            name: sanitizedSong,
-            URL: await ytSearcher.search(sanitizedSong)
-        })
-        bar.increment()
-        wait()
+            if (newSong.URL) {
+                ytSongList.push(newSong)
+                console.log(ytSongList[ytSongList.length-1])
+            }
+            await getAllUrls(x+1)
+        }
     }
-    bar.stop()
+    await getAllUrls(0)
 
-    console.log(ytSongList)
-
-    // console.log('Downloading songs')
-    // let ytDownloader = new YoutubeDownloader()
-    // for (let i = 0; i < ytSongList.length; ++i) {
-    //     let { name, URL } = ytSongList[i]
-    //     let streamMP4 = ytDownloader.downloadMp4Stream(URL)
-    //     new ffmpeg({ source: streamMP4, nolog: true })
-    //         .setFfmpegPath(config.ffmpegPath)
-    //         .toFormat('mp3')
-    //         .saveToFile(`./songs/${name}`)
-    // }
+    console.log('Downloading songs')
+    let ytDownloader = new YoutubeDownloader()
+    let downloadAllSongs = async function(x) {
+        if (x < ytSongList.length) {
+            console.log(`Downloading song ${x}/${ytSongList.length}`)
+            let { name, URL } = ytSongList[x]
+            ytDownloader.downloadMp4Stream(URL, name).then(_ => {
+                downloadAllSongs(x+1)
+            })
+        }
+    }
+    await downloadAllSongs(0)
 }
 
 main()
