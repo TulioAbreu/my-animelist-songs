@@ -1,3 +1,4 @@
 module.exports = {
-    "profileName": "Marcot"
+    // This is where you put your profile name
+    "profileName": ""
 }
