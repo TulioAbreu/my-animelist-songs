@@ -10,7 +10,7 @@ const config = require('../config.js')
 
 async function main() {
     function wait() {
-        sleep(Math.random()*1000 + 500)
+        sleep(1000)
     }
 
     function sanitizeMusicName(name) {
@@ -31,7 +31,21 @@ async function main() {
         return name
     }
     
-    console.log('Collecting profile animes... ' + config.profileName)
+    async function getAnimesSongs(animeUrlList) {
+        if (animeUrlList.length <= 0) { 
+            return []
+        }
+        
+        let currAnimeURL = animeUrlList[0]
+        const currAnimeSongList = await getAnimeSongs(currAnimeURL)
+        wait()  // Be nice to the website!
+        
+        console.log(currAnimeSongList)
+
+        return currAnimeSongList.concat(await getAnimesSongs(animeUrlList.slice(1)))
+    }
+
+    console.log(`Collecting profile data [profileName="${config.profileName}"]`)
     const animeIdList = await scrapProfile(config.profileName)
 
     const animeUrlList = []
@@ -40,22 +54,7 @@ async function main() {
     }
 
     console.log('Collecting anime songs')
-    let songList = []
-
-    let getAllSongs = async function(x) {
-        if (x < animeUrlList.length) {
-            console.log(`Requesting anime page ${x}/${animeUrlList.length}`)
-            const animeSongList = await getAnimeSongs(animeUrlList[x])
-            animeSongList.forEach(song => {
-                songList.push(song)
-            })
-            console.log(animeSongList)
-            wait()
-            await getAllSongs(x+1)
-        }
-    }
-    await getAllSongs(0)
-
+    let songList = await getAnimesSongs(animeUrlList)
 
     console.log('Collecting songs URLs')
     let ytSearcher = new YoutubeSearcher()
