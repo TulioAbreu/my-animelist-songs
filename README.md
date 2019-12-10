@@ -1,5 +1,13 @@
-# my-animeList Songs
+# My Anime List Songs
 
-This is a node script that scrapes your MyAnimeList profile and get all animes you've seen already. From this anime list, it saves all songs (openings/endings) name and youtube URL into a JSON file.
+Saves all songs (openings/endings) from all animes you have watched.
 
-For changing the scrapped profile simply change profileName value inside "config.js" file into yours.
+# Quick start
+
+1. Add your MAL profile name into *config.js* file
+
+2. Run the program
+```bash
+$ npm install
+$ node src/main.js
+```
