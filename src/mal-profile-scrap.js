@@ -1,6 +1,7 @@
 const getPageHtml = require('./common')
 
-module.exports = async function getMalProfileAnimes(username) {
+
+async function getMalProfileAnimes(username) {
     let animes = []
     const htmlPage = await getPageHtml(`http://myanimelist.net/animelist/${username}`)
 
@@ -15,3 +16,5 @@ module.exports = async function getMalProfileAnimes(username) {
     }
     return animes
 }
+
+module.exports = getMalProfileAnimes;
